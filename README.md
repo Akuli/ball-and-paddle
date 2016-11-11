@@ -8,7 +8,7 @@ repository for it.
 
 ## How to run it
 
-Make sure you have Python 3.3 or newer with Tkinter and PyGame installed.
+Make sure you have Python 2 or 3 with Tkinter and PyGame installed.
 Then just run `ball-and-paddle.py` with your Python and everything should
 work.
 

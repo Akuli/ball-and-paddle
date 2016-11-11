@@ -34,7 +34,10 @@ F2                          Start a new game
 Q                           Quit
 """
 
+from __future__ import division, print_function, unicode_literals
+
 import contextlib
+import io
 import math
 import os
 import random
@@ -45,12 +48,14 @@ import time
 import easygui
 import pygame
 
-if sys.version_info < (3, 3):
-    sys.exit("%s: Python 3.3 or newer is required" % sys.argv[0])
-
 # We can't use an assertion here because -O and -OO disable assertions.
 if __doc__ is None:
     sys.exit("%s: don't use Python's -OO switch" % sys.argv[0])
+
+if sys.version_info < (3, 3):
+    _NoFile = IOError
+else:
+    _NoFile = FileNotFoundError
 
 
 def sin(angle):
@@ -297,15 +302,15 @@ def backup(orig):
         beginning += '.bak'
     copy = beginning + end
 
-    with open(orig, 'r') as src:
-        with open(copy, 'w') as dst:
+    with io.open(orig, 'r') as src:
+        with io.open(copy, 'w') as dst:
             shutil.copyfileobj(src, dst)
 
     try:
         yield
     except Exception:
-        with open(copy, 'r') as src:
-            with open(orig, 'w') as dst:
+        with io.open(copy, 'r') as src:
+            with io.open(orig, 'w') as dst:
                 shutil.copyfileobj(src, dst)
 
     # This is not in the finally part because this isn't meant to be ran
@@ -325,25 +330,25 @@ class HighScoreCounter:
         del self._scores[3:]      # Remove everything except 3 high scores.
 
     def read(self):
-        self._scores.clear()
+        self._scores[:] = []
         try:
-            with open(self._filename, 'r') as file:
+            with io.open(self._filename, 'r') as file:
                 for line in file:
                     line = line.strip()
                     if not line:
                         continue
                     seconds, name = line.split(maxsplit=1)
                     self._scores.append((float(seconds), name))
-        except FileNotFoundError:
+        except _NoFile:
             # No high scores yet, let's create an empty file so that
             # backing up the scores for writing will succeed.
-            with open(self._filename, 'w'):
+            with io.open(self._filename, 'w'):
                 pass
         self._fix()
 
     def _write(self):
         with backup(self._filename):
-            with open(self._filename, 'w') as f:
+            with io.open(self._filename, 'w') as f:
                 for seconds, name in self._scores:
                     print(seconds, name, sep='\t', file=f)
 
@@ -405,7 +410,7 @@ def main():
                 # We need to get the ball centered on the paddle.
                 balls[0].x = paddle.x
 
-            for ball in balls.copy():
+            for ball in balls[:]:
                 if ball.y > 600+ball.radius:
                     balls.remove(ball)
 
@@ -436,7 +441,7 @@ def main():
                         easygui.codebox(title="Ball and paddle", text=__doc__)
                     if event.key == pygame.K_F2:
                         # Start a new game by quitting this loop.
-                        balls.clear()
+                        balls[:] = []
                     if event.key == pygame.K_q:
                         pygame.quit()
                         sys.exit()
