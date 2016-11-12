@@ -68,6 +68,11 @@ def cos(angle):
     return math.cos(math.radians(angle))
 
 
+def time_to_hide(starttime):
+    """A helper function for blinking things."""
+    return (time.time() - starttime) % 1 < 0.5
+
+
 class Ball:
 
     def __init__(self, paddle, ball_list):
@@ -83,8 +88,8 @@ class Ball:
         self.angle = 180        # Moving up.
         self.crazy_speed = False
         self.crazy_angle = False
-        self.blinkingtime = None  # Time since starting to blink or None.
-        self.visible = True
+        self._create_time = time.time()
+        self._blinking = False
         self.on_the_paddle = False
 
     def _do_random(self):
@@ -93,7 +98,7 @@ class Ball:
         self.crazy_angle = random.choice([True, False])
         self.crazy_speed = random.choice([True, False])
         self.radius = random.choice([10, 50])
-        self.blinking = random.choice([time.time(), None])
+        self._blinking = random.choice([True, False, False])
 
         if random.choice([True, False]):
             ball = Ball(paddle=self.paddle, ball_list=self.ball_list)
@@ -101,13 +106,16 @@ class Ball:
 
     def draw(self, surface):
         """Draw the ball on the surface."""
-        if self.visible:
-            # White circle.
-            pygame.draw.circle(surface, (255, 255, 255),
-                               [int(self.x), int(self.y)], self.radius)
-            # Black border.
-            pygame.draw.circle(surface, (0, 0, 0),
-                               [int(self.x), int(self.y)], self.radius, 1)
+        if self._blinking and time_to_hide(self._create_time):
+            # Time to hide.
+            return
+
+        # White circle.
+        pygame.draw.circle(surface, (255, 255, 255),
+                           [int(self.x), int(self.y)], self.radius)
+        # Black border.
+        pygame.draw.circle(surface, (0, 0, 0),
+                           [int(self.x), int(self.y)], self.radius, 1)
 
     def move(self):
         """Move the ball and change its settings."""
@@ -125,17 +133,6 @@ class Ball:
                 the_range = (10, 15)
             self.x += sin(self.angle) * random.randint(*the_range)
             self.y += cos(self.angle) * random.randint(*the_range)
-
-            if self.blinkingtime is not None:
-                # Blink it.
-                now = time.time()
-                difference = now - self.blinkingtime
-                if difference > 0.5:
-                    self.blinkingtime = now
-                    self.visible = not self.visible
-            else:
-                # Make sure the ball just displays itself.
-                self.visible = True
 
     def _on_hit(self, side, paddlespot=None):
         """This is ran when the ball hits to the wall or the paddle.
@@ -220,13 +217,21 @@ class Paddle:
         self.x = 400        # Centered.
         self.direction = 0  # -1 is left, 1 is right, 0 is not moving.
         self._flip = False  # Turn right to left and left to right.
+        self._create_time = time.time()
+        self._blinking = False
 
     def do_random(self):
         """Decide the paddle's direction."""
         self._flip = random.choice([True, False])
+        # The paddle is unlikely to blink, but it happens sometimes.
+        self._blinking = random.random() < 0.2
 
     def draw(self, surface):
         """Draw the paddle on surface."""
+        if self._blinking and time_to_hide(self._create_time):
+            # Time to hide.
+            return
+
         pygame.draw.rect(surface, (0, 255, 0), [self.x-50, 575, 100, 12])
 
     def move(self):
