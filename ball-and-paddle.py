@@ -342,7 +342,7 @@ class HighScoreCounter:
                     line = line.strip()
                     if not line:
                         continue
-                    seconds, name = line.split(maxsplit=1)
+                    seconds, name = line.split('\t', 1)
                     self._scores.append((float(seconds), name))
         except _NoFile:
             # No high scores yet, let's create an empty file so that
@@ -355,7 +355,7 @@ class HighScoreCounter:
         with backup(self._filename):
             with io.open(self._filename, 'w') as f:
                 for seconds, name in self._scores:
-                    print(seconds, name, sep='\t', file=f)
+                    print('%.4f\t%s' % (seconds, name), file=f)
 
     def add_result(self, seconds):
         """Add a new high score."""
@@ -372,7 +372,7 @@ class HighScoreCounter:
             # The user cancelled.
             return
 
-        self._scores.append((round(seconds, 5), name.strip() or "???"))
+        self._scores.append((seconds, name.strip() or "???"))
         self._fix()
         self._write()
         self.show_scores()
