@@ -68,7 +68,7 @@ def cos(angle):
     return math.cos(math.radians(angle))
 
 
-def time_to_hide(starttime):
+def time2hide(starttime):
     """A helper function for blinking things."""
     return (time.time() - starttime) % 1 < 0.5
 
@@ -106,7 +106,7 @@ class Ball:
 
     def draw(self, surface):
         """Draw the ball on the surface."""
-        if self._blinking and time_to_hide(self._create_time):
+        if self._blinking and time2hide(self._create_time):
             # Time to hide.
             return
 
@@ -228,7 +228,7 @@ class Paddle:
 
     def draw(self, surface):
         """Draw the paddle on surface."""
-        if self._blinking and time_to_hide(self._create_time):
+        if self._blinking and time2hide(self._create_time):
             # Time to hide.
             return
 
