@@ -74,6 +74,25 @@ def time2hide(starttime):
 
 
 class Ball:
+    """A ball on the screen.
+
+    Ball objects remember their position, movement and they implement
+    all the crazy things that the balls do.
+
+    The angle is stored in degrees, like this:
+
+                      A
+                      | 180
+                      |
+                      |
+         270          |           90
+        <------------- ------------->
+                      |
+                      |
+                      |
+                      | 0
+                      V
+    """
 
     def __init__(self, paddle, ball_list):
         """Initialize the ball.
