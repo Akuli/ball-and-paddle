@@ -94,13 +94,9 @@ class Ball:
                       V
     """
 
-    def __init__(self, paddle, ball_list):
-        """Initialize the ball.
-
-        Sometimes a new ball is added to the ball list.
-        """
-        self.paddle = paddle
-        self.ball_list = ball_list
+    def __init__(self, game):
+        """Initialize the ball."""
+        self.game = game
         self.radius = 10
         self.x = 400            # Centered.
         self.y = 565            # On the paddle.
@@ -109,9 +105,8 @@ class Ball:
         self.crazy_angle = False
         self._create_time = time.time()
         self._blinking = False
-        self.on_the_paddle = False
 
-    def _do_random(self):
+    def do_random(self):
         """Change the ball's settings randomly."""
         # Decide how crazy the ball will be.
         self.crazy_angle = random.choice([True, False])
@@ -120,8 +115,8 @@ class Ball:
         self._blinking = random.choice([True, False, False])
 
         if random.choice([True, False]):
-            ball = Ball(paddle=self.paddle, ball_list=self.ball_list)
-            self.ball_list.append(ball)
+            self.game.balls.append(Ball(self.game))
+        self.game.speed = 1#random.random()
 
     def draw(self, surface):
         """Draw the ball on the surface."""
@@ -138,7 +133,7 @@ class Ball:
 
     def move(self):
         """Move the ball and change its settings."""
-        if not self.on_the_paddle:
+        if self.game.launched:
             # Change the angle.
             if self.crazy_angle:
                 self.angle += random.randint(-20, 20)
@@ -150,8 +145,12 @@ class Ball:
                 the_range = (-10, 40)
             else:
                 the_range = (10, 15)
-            self.x += sin(self.angle) * random.randint(*the_range)
-            self.y += cos(self.angle) * random.randint(*the_range)
+            self.x += (sin(self.angle)
+                       * random.randint(*the_range)
+                       * self.game.speed)
+            self.y += (cos(self.angle)
+                       * random.randint(*the_range)
+                       * self.game.speed)
 
     def _on_hit(self, side, paddlespot=None):
         """This is ran when the ball hits to the wall or the paddle.
@@ -199,7 +198,7 @@ class Ball:
             self.angle = 180 - self.angle
             self.angle -= paddlespot  # Ball goes off to a side.
             self.angle %= 360
-            self._do_random()
+            self.do_random()
 
             # Ball is moved after possibly changing the radius.
             self.y = 575 - self.radius
@@ -217,7 +216,7 @@ class Ball:
             self._on_hit('w')
         if self.y > 575 - self.radius:  # Paddle.
             # Distance from the paddle's center to the ball's center.
-            paddlespot = self.x - self.paddle.x
+            paddlespot = self.x - self.game.paddle.x
 
             # Width of an imaginary big paddle to make sure that it's
             # easy to bump the ball with the edge of the paddle.
@@ -225,14 +224,15 @@ class Ball:
 
             if -bigpaddle/2 < paddlespot < bigpaddle/2:
                 # Now we are sure that the ball hits the paddle.
-                self.paddle.do_random()
+                self.game.paddle.do_random()
                 self._on_hit('s', paddlespot)
 
 
 class Paddle:
 
-    def __init__(self):
+    def __init__(self, game):
         """Initialize the paddle."""
+        self.game = game
         self.x = 400        # Centered.
         self.direction = 0  # -1 is left, 1 is right, 0 is not moving.
         self._flip = False  # Turn right to left and left to right.
@@ -256,9 +256,9 @@ class Paddle:
     def move(self):
         """Move the paddle."""
         if self._flip:
-            self.x -= self.direction * 15
+            self.x -= self.direction * 15 * self.game.speed
         else:
-            self.x += self.direction * 15
+            self.x += self.direction * 15 * self.game.speed
 
         # The paddle must stay on the screen.
         if self.x < 50:
@@ -405,88 +405,99 @@ class HighScoreCounter:
         easygui.msgbox(text, title="High scores")
 
 
-def main():
-    pygame.init()
-    pygame.font.init()
-    screen = pygame.display.set_mode([800, 600])
-    pygame.display.set_caption("Ball and paddle")
+class BallGame:
 
-    clock = Clock(60)
-    scorecounter = HighScoreCounter('scores.txt')
-    scorecounter.read()
+    def __init__(self, screen):
+        self.balls = []
+        self.screen = screen
+        self.clock = Clock(60)
+        self.scorecounter = HighScoreCounter('scores.txt')
+        self.paddle = None
+        self.speed = None
 
-    while True:
-        paddle = Paddle()
-        balls = []
-        first_ball = Ball(paddle=paddle, ball_list=balls)
-        first_ball.on_the_paddle = True
-        balls.append(first_ball)
+    def run(self):
+        assert not self.balls
+        self.balls.append(Ball(self))
+        self.paddle = Paddle(self)
+        self.launched = False
+        self.speed = 1
 
-        while balls:
-            # Limit the speed of the game and update the clock.
-            clock.wait()
+        while self.balls:
+            self.clock.wait()
 
-            paddle.move()
-            for ball in balls:
+            self.paddle.move()
+            for ball in self.balls:
                 ball.move()
 
-            if balls[0].on_the_paddle:
-                # We need to get the ball centered on the paddle.
-                balls[0].x = paddle.x
+            for ball in self.balls[:]:
+                if self.launched:
+                    if ball.y > 600 + ball.radius:
+                        # too low
+                        self.balls.remove(ball)
+                else:
+                    # center the ball on the paddle
+                    ball.x = self.paddle.x
 
-            for ball in balls[:]:
-                if ball.y > 600+ball.radius:
-                    balls.remove(ball)
-
-            # Draw everything.
-            screen.fill(0)
-            clock.draw(screen)
-            paddle.draw(screen)
-            for ball in balls:
-                ball.draw(screen)
+            self.screen.fill(0)
+            self.clock.draw(self.screen)
+            self.paddle.draw(self.screen)
+            for ball in self.balls:
+                ball.draw(self.screen)
             pygame.display.flip()
 
             # Check for events and stop game when needed.
             for event in pygame.event.get():
                 if event.type == pygame.KEYDOWN:
                     if event.key in {pygame.K_LEFT, pygame.K_a}:
-                        paddle.direction = -1
+                        self.paddle.direction = -1
                     if event.key in {pygame.K_RIGHT, pygame.K_d}:
-                        paddle.direction = 1
+                        self.paddle.direction = 1
                     if event.key in {pygame.K_SPACE, pygame.K_RETURN,
                                      pygame.K_UP, pygame.K_w}:
                         # Launch.
-                        if balls[0].on_the_paddle:
-                            clock.start()
-                            balls[0].on_the_paddle = False
+                        if not self.launched:
+                            self.clock.start()
+                            self.launched = True
                     if event.key == pygame.K_h:
-                        scorecounter.show_scores()
+                        self.scorecounter.show_scores()
                     if event.key == pygame.K_F1:
-                        easygui.codebox(title="Ball and paddle", text=__doc__)
+                        easygui.codebox(title="Ball and paddle",
+                                        text=__doc__)
                     if event.key == pygame.K_F2:
                         # Start a new game by quitting this loop.
-                        balls[:] = []
+                        self.balls[:] = []
                     if event.key == pygame.K_q:
                         pygame.quit()
                         sys.exit()
 
                 if event.type == pygame.KEYUP:
                     if event.key in {pygame.K_LEFT, pygame.K_a}:
-                        if paddle.direction == -1:
-                            paddle.direction = 0
+                        if self.paddle.direction == -1:
+                            self.paddle.direction = 0
                     if event.key in {pygame.K_RIGHT, pygame.K_d}:
-                        if paddle.direction == 1:
-                            paddle.direction = 0
+                        if self.paddle.direction == 1:
+                            self.paddle.direction = 0
 
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
 
-            for ball in balls:
+            for ball in self.balls:
                 ball.hitcheck()
 
-        clock.stop()
-        scorecounter.add_result(clock.time)
+        self.clock.stop()
+        self.scorecounter.add_result(self.clock.time)
+
+
+def main():
+    pygame.init()
+    pygame.font.init()
+    screen = pygame.display.set_mode([800, 600])
+    pygame.display.set_caption("Ball and paddle")
+    game = BallGame(screen)
+    game.scorecounter.read()
+    while True:
+        game.run()
 
 
 if __name__ == '__main__':
