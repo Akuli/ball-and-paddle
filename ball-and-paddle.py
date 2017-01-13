@@ -402,10 +402,10 @@ class HighScoreCounter:
             return
         name = name.strip() or "???"
 
-        self._scores.append((seconds, name.strip() or "???"))
+        self._scores.append((seconds, name))
+        self._scores.sort(reverse=True)
         with io.open(self._filename, 'a') as f:
             print('%.4f\t%s' % (seconds, name), file=f)
-        self._scores.sort(reverse=True)
         return True
 
     def show_scores(self):
