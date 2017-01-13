@@ -36,12 +36,9 @@ Q                           Quit
 
 from __future__ import division, print_function, unicode_literals
 
-import contextlib
 import io
 import math
-import os
 import random
-import shutil
 import sys
 import time
 
@@ -101,7 +98,7 @@ class Ball:
         self.game = game
         self.radius = self.RADIUSES[0]
         self.x = game.width // 2
-        self.y = 565            # On the paddle.
+        self.y = game.height - Paddle.HEIGHT - self.radius
         self.angle = 270
         self.crazy_speed = False
         self.crazy_angle = False
@@ -362,45 +359,14 @@ class Clock:
         surface.blit(text, (0, 0))
 
 
-@contextlib.contextmanager
-def backup(orig):
-    """Back up a file temporarily.
-
-    The file must exist.
-    """
-    assert os.path.isfile(orig), "%s isn't file, it can't be backed up" % orig
-
-    beginning, end = os.path.splitext(orig)
-    while os.path.exists(beginning + end):
-        beginning += '.bak'
-    copy = beginning + end
-
-    with io.open(orig, 'r') as src:
-        with io.open(copy, 'w') as dst:
-            shutil.copyfileobj(src, dst)
-
-    try:
-        yield
-    except Exception:
-        with io.open(copy, 'r') as src:
-            with io.open(orig, 'w') as dst:
-                shutil.copyfileobj(src, dst)
-
-    # This is not in the finally part because this isn't meant to be ran
-    # if restoring from the backup fails.
-    os.remove(copy)
-
-
 class HighScoreCounter:
+
+    MAX_SCORES = 3
+    # The best times will be first in the _scores list.
 
     def __init__(self, filename):
         self._filename = filename
-        self._scores = []   # 2-tuples of times in seconds and names.
-
-    def _fix(self):
-        self._scores.sort()       # Worst (shortest) time first.
-        self._scores.reverse()    # Best (longest) time first.
-        del self._scores[3:]      # Remove everything except 3 high scores.
+        self._scores = []   # [(seconds, name), ...]
 
     def read(self):
         self._scores[:] = []
@@ -413,42 +379,40 @@ class HighScoreCounter:
                     seconds, name = line.split('\t', 1)
                     self._scores.append((float(seconds), name))
         except _NoFile:
-            # No high scores yet, let's create an empty file so that
-            # backing up the scores for writing will succeed.
-            with io.open(self._filename, 'w'):
-                pass
-        self._fix()
-
-    def _write(self):
-        with backup(self._filename):
-            with io.open(self._filename, 'w') as f:
-                for seconds, name in self._scores:
-                    print('%.4f\t%s' % (seconds, name), file=f)
+            # add_result() will create the score file.
+            pass
+        self._scores.sort(reverse=True)     # Best scores first.
 
     def add_result(self, seconds):
-        """Add a new high score."""
-        if len(self._scores) == 3:
-            # There are already three high scores. Maybe we don't need
-            # to add this score at all?
-            if seconds < self._scores[-1][0]:
-                # The time is shorter than the worst time so there's no
-                # need to add this.
-                return
+        """Add a new high score if it's good enough.
+
+        Return True if the score was added.
+        """
+        if len(self._scores) >= self.MAX_SCORES:
+            # There are already many high scores. Maybe this score is no
+            # better than the worst score that is displayed?
+            if seconds < self._scores[self.MAX_SCORES-1][0]:
+                # The time is shorter than the worst displayed time so
+                # there's no need to add this.
+                return False
 
         name = easygui.enterbox("Enter your name:", title="High score")
         if name is None:
             # The user cancelled.
             return
+        name = name.strip() or "???"
 
         self._scores.append((seconds, name.strip() or "???"))
-        self._fix()
-        self._write()
-        self.show_scores()
+        with io.open(self._filename, 'a') as f:
+            print('%.4f\t%s' % (seconds, name), file=f)
+        self._scores.sort(reverse=True)
+        return True
 
     def show_scores(self):
         if self._scores:
-            text = '\n'.join(format_time(seconds) + '\t' + name
-                             for seconds, name in self._scores)
+            text = '\n'.join(
+                format_time(seconds) + '\t' + name
+                for seconds, name in self._scores[:self.MAX_SCORES])
         else:
             text = "There are no high scores yet."
         easygui.msgbox(text, title="High scores")
@@ -550,7 +514,8 @@ class BallGame:
                 ball.hitcheck()
 
         self.clock.stop()
-        self.scorecounter.add_result(self.clock.time)
+        if self.scorecounter.add_result(self.clock.time):
+            self.scorecounter.show_scores()
 
 
 def main():
