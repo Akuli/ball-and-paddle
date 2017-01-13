@@ -321,7 +321,7 @@ class Clock:
         """Initialize the clock."""
         self.game = game
         self.time = 0
-        self._font = pygame.font.Font(None, 40)  # 40px oletusfontti.
+        self._font = pygame.font.Font(None, 40)  # 40px default font.
         self._running = False
         self._frequency = frequency
         self._clock = pygame.time.Clock()
