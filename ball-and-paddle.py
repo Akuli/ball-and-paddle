@@ -59,16 +59,6 @@ else:
     _NoFile = FileNotFoundError
 
 
-def sin(angle):
-    """Trigonometric sin with degrees."""
-    return math.sin(math.radians(angle))
-
-
-def cos(angle):
-    """Trigonometric cosin with degrees."""
-    return math.cos(math.radians(angle))
-
-
 def time2hide(starttime):
     """A helper function for blinking things.
 
@@ -85,22 +75,26 @@ class Ball:
 
     The angle is stored in degrees, like this:
 
-                      A
-                      | 180
-                      |
-                      |
-         270          |           90
-        <------------- ------------->
-                      |
-                      |
-                      |
-                      | 0
-                      V
+                  A
+                  | 270
+                  |
+                  |
+         180      |        0
+        <--------- --------->
+                  |
+                  |
+                  |
+                  | 90
+                  V
     """
 
     RADIUSES = [10, 50]
     NORMAL_ANGLE_DELTA = 2
     CRAZY_ANGLE_DELTA = 20
+    NORMAL_SPEEDRANGE = (10, 15)
+    CRAZY_SPEEDRANGE = (-10, 40)
+    EDGE_AVOID_ANGLE = 3
+    PADDLE_RANDOMNESS = (-10, 10)
 
     def __init__(self, game):
         """Initialize the ball."""
@@ -108,7 +102,7 @@ class Ball:
         self.radius = self.RADIUSES[0]
         self.x = game.width // 2
         self.y = 565            # On the paddle.
-        self.angle = 180        # Moving up.
+        self.angle = 270
         self.crazy_speed = False
         self.crazy_angle = False
         self._create_time = time.time()
@@ -143,20 +137,43 @@ class Ball:
     def move(self):
         """Move the ball and change its settings."""
         if self.game.launched:
-            # Change the angle.
             if self.crazy_angle:
                 delta = self.CRAZY_ANGLE_DELTA
             else:
                 delta = self.NORMAL_ANGLE_DELTA
             self.angle += random.randint(-delta, delta)
 
-            # Move the ball.
             if self.crazy_speed:
-                the_range = (-10, 40)
+                speedrange = self.CRAZY_SPEEDRANGE
             else:
-                the_range = (10, 15)
-            xdiff = sin(self.angle) * random.randint(*the_range)
-            ydiff = cos(self.angle) * random.randint(*the_range)
+                speedrange = self.NORMAL_SPEEDRANGE
+
+            # In this picture, speed is random.randint(*speedrange). It
+            # needs to be calculated once for xdiff and once for ydiff
+            # to make the game is as crazy as possible.
+            #
+            #    xdiff
+            # -----------
+            # \)angle   |
+            #  \        |
+            #   \       |
+            #    \      |
+            #     \     |
+            #      \    | ydiff
+            # speed \   |
+            #        \  |
+            #         \ |
+            #          \|
+            #
+            # sin(angle) = ydiff / speed
+            # ydiff = sin(angle) * speed
+            #
+            # cos(angle) = xdiff / speed
+            # xdiff = cos(angle) * speed
+            angle = math.radians(self.angle)
+            ydiff = math.sin(angle) * random.randint(*speedrange)
+            xdiff = math.cos(angle) * random.randint(*speedrange)
+
             if self.game.double_speed:
                 xdiff *= 2
                 ydiff *= 2
@@ -172,46 +189,43 @@ class Ball:
         """
         if side == 'a':     # Left wall.
             # Bounce from the wall.
-            self.angle = -self.angle
-
-            # Make sure that 0 <= angle < 360.
+            self.angle = 180 - self.angle
             self.angle %= 360
-
             # Make sure that the ball is not going into a wall.
-            if 180 <= self.angle <= 270:
-                self.angle = 177
-            elif 270 <= self.angle < 360 or self.angle == 0:
-                self.angle = 3
+            if 90 <= self.angle <= 180:
+                self.angle = 90 - self.EDGE_AVOID_ANGLE
+            elif 180 <= self.angle <= 270:
+                self.angle = 270 + self.EDGE_AVOID_ANGLE
 
             # Move the ball so that it touches the wall.
             self.x = self.radius
 
         if side == 'd':     # Right wall.
-            self.angle = -self.angle
+            self.angle = 180 - self.angle
             self.angle %= 360
-            if self.angle <= 90:
-                self.angle = 357
-            elif 90 <= self.angle <= 180:
-                self.angle = 183
+            if self.angle >= 270:
+                self.angle = 270 - self.EDGE_AVOID_ANGLE
+            elif self.angle <= 90:
+                self.angle = 90 + self.EDGE_AVOID_ANGLE
             self.x = self.game.width - self.radius
 
         if side == 'w':     # Top wall.
-            self.angle = 180 - self.angle
+            self.angle = -self.angle
             self.angle %= 360
-            if 90 <= self.angle <= 180:
-                self.angle = 87
-            elif 180 <= self.angle <= 270:
-                self.angle = 273
+            if 180 <= self.angle <= 270:
+                self.angle = 180 - self.EDGE_AVOID_ANGLE
+            if self.angle >= 270:
+                self.angle = self.EDGE_AVOID_ANGLE
             self.y = self.radius
 
         if side == 's':     # Paddle.
-            self.angle += random.randint(-10, 10)
-            self.angle = 180 - self.angle
+            self.angle = -self.angle
             self.angle -= paddlespot  # Ball goes off to a side.
+            self.angle += random.randint(*self.PADDLE_RANDOMNESS)
             self.angle %= 360
             self.do_random()
-
-            # Ball is moved after possibly changing the radius.
+            # do_random() may change the radius, so this needs to be
+            # after it.
             self.y = self.game.height - Paddle.HEIGHT - self.radius
 
     def hitcheck(self):
