@@ -18,6 +18,6 @@ easygui seems to be broken on Python 3, so I've included an old version of
 easygui with this project. You need to have Tkinter installed because
 EasyGUI uses it.
 
-## WTF... ?
+## WTF...?!!?!
 
 Yes, I said it's crazy.
