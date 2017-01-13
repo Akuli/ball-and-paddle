@@ -113,9 +113,10 @@ class Ball:
         self.crazy_angle = False
         self._create_time = time.time()
         self._blinking = False
+        self.is_fake = random.choice([False, False, True])
 
     def do_random(self):
-        """Change the ball's settings randomly."""
+        """Do crazy things."""
         # Decide how crazy the ball will be.
         self.crazy_angle = random.choice([True, False])
         self.crazy_speed = random.choice([True, False])
@@ -129,14 +130,15 @@ class Ball:
             # Time to hide.
             return
 
-        fill = (255, 255, 255)
-        border = (0, 0, 0)
-        if self.game.crazy_colors:
-            fill, border = border, fill
-        pygame.draw.circle(surface, fill,
-                           [int(self.x), int(self.y)], self.radius)
-        pygame.draw.circle(surface, border,
-                           [int(self.x), int(self.y)], self.radius, 1)
+        if self.is_fake:
+            fill = (127, 127, 127)
+        elif self.game.double_speed:
+            fill = (0, 0, 0)
+        else:
+            fill = (255, 255, 255)
+        coords = [int(self.x), int(self.y)]
+        pygame.draw.circle(surface, fill, coords, self.radius)
+        pygame.draw.circle(surface, (0, 0, 0), coords, self.radius, 1)
 
     def move(self):
         """Move the ball and change its settings."""
@@ -153,12 +155,13 @@ class Ball:
                 the_range = (-10, 40)
             else:
                 the_range = (10, 15)
-            self.x += (sin(self.angle)
-                       * random.randint(*the_range)
-                       * self.game.speed)
-            self.y += (cos(self.angle)
-                       * random.randint(*the_range)
-                       * self.game.speed)
+            xdiff = sin(self.angle) * random.randint(*the_range)
+            ydiff = cos(self.angle) * random.randint(*the_range)
+            if self.game.double_speed:
+                xdiff *= 2
+                ydiff *= 2
+            self.x += xdiff
+            self.y += ydiff
 
     def _on_hit(self, side, paddlespot=None):
         """This is ran when the ball hits to the wall or the paddle.
@@ -214,7 +217,7 @@ class Ball:
     def hitcheck(self):
         """Check if the ball hits the paddle or an wall and handle it.
 
-        Call self._on_hit when needed.
+        Call self._on_hit() when needed.
         """
         if self.x < self.radius:  # Left wall.
             self._on_hit('a')
@@ -223,14 +226,17 @@ class Ball:
         if self.y < self.radius:  # Top wall.
             self._on_hit('w')
         if self.y > self.game.height - Paddle.HEIGHT - self.radius:  # Paddle.
+            if self.is_fake:
+                return
+
             # Distance from the paddle's center to the ball's center.
             paddlespot = self.x - self.game.paddle.x
 
             # Width of an imaginary big paddle to make sure that it's
             # easy to bump the ball with the edge of the paddle.
-            bigpaddle = self.radius * 2 + 100
+            bigpaddle = self.radius + self.game.paddle.width + self.radius
 
-            if -bigpaddle/2 < paddlespot < bigpaddle/2:
+            if -bigpaddle//2 < paddlespot < bigpaddle//2:
                 # Now we are sure that the ball hits the paddle.
                 self.game.paddle.do_random()
                 self._on_hit('s', paddlespot)
@@ -239,47 +245,56 @@ class Ball:
 class Paddle:
 
     HEIGHT = 25     # from bottom of game to top edge
+    WIDTHS = [100, 100, 100, 75, 200]
+    THICKNESS = 12
+    SPEED = 15
 
     def __init__(self, game):
         """Initialize the paddle."""
         self.game = game
-        self.x = 400        # Centered.
+        self.x = game.width // 2
         self.direction = 0  # -1 is left, 1 is right, 0 is not moving.
         self._flip = False  # Turn right to left and left to right.
         self._create_time = time.time()
         self._blinking = False
+        self.width = self.WIDTHS[0]
 
     def do_random(self):
-        """Decide the paddle's direction."""
-        self._flip = random.choice([True, False])
+        """Do crazy things."""
         # The paddle is unlikely to blink, but it happens sometimes.
         self._blinking = random.random() < 0.2
+        self._flip = random.choice([True, False])
+        self.width = random.choice(self.WIDTHS)
 
     def draw(self, surface):
         """Draw the paddle on surface."""
         if self._blinking and time2hide(self._create_time):
             # Time to hide.
             return
-        if self.game.crazy_colors:
-            color = (0, 0, 0)     # black
+        if self._flip:
+            color = (255, 0, 127)  # pink
         else:
-            color = (0, 255, 0)     # green
-        pygame.draw.rect(
-            surface, color,
-            [self.x-50, self.game.height-self.HEIGHT, 100, 12])
+            color = (0, 255, 0)  # green
+        coords = [self.x - self.width//2, self.game.height - self.HEIGHT,
+                  self.width, self.THICKNESS]
+        pygame.draw.rect(surface, color, coords)
+        if self.game.double_speed:
+            pygame.draw.rect(surface, (0, 0, 0), coords, 3)
 
     def move(self):
         """Move the paddle."""
+        difference = self.direction * self.SPEED
         if self._flip:
-            self.x -= self.direction * 15 * self.game.speed
-        else:
-            self.x += self.direction * 15 * self.game.speed
+            difference = -difference
+        if self.game.double_speed:
+            difference *= 2
+        self.x += difference
 
         # The paddle must stay on the screen.
-        if self.x < 50:
-            self.x = 50
-        if self.x > 750:
-            self.x = 750
+        if self.x < self.width // 2:
+            self.x = self.width // 2
+        if self.x > self.game.width - self.width//2:
+            self.x = self.game.width - self.width//2
 
 
 def format_time(seconds):
@@ -325,7 +340,7 @@ class Clock:
 
     def draw(self, surface):
         """Draw a clock to the upper left corner of surface."""
-        if self.game.crazy_colors:
+        if self.game.double_speed:
             color = (0, 0, 0)
         else:
             color = (255, 255, 255)
@@ -429,28 +444,30 @@ class BallGame:
 
     def __init__(self, screen):
         self.width, self.height = screen.get_size()
-        self.crazy_colors = False
+        self.double_speed = False
         self.balls = []
         self.screen = screen
         self.clock = Clock(self, 60)
         self.scorecounter = HighScoreCounter('scores.txt')
         self.paddle = None
-        self.speed = None
+        self.double_speed = False
 
     def do_random(self):
-        # called by Ball.do_random()
-        if random.choice([True, False]):
+        """Do crazy things."""
+        # This is called by Ball.do_random() when the ball hits a
+        # paddle.
+        if random.choice([True, True, False]):
             self.balls.append(Ball(self))
-        self.speed = random.choice([1, 1, 2])
-        self.crazy_colors = (self.speed == 2)
+        self.double_speed = random.choice([False, False, False, True])
 
     def run(self):
-        assert not self.balls
-        self.balls.append(Ball(self))
+        assert not self.balls, "cannot run twice at the same time"
+        first_ball = Ball(self)
+        first_ball.is_fake = False
+        self.balls.append(first_ball)
         self.paddle = Paddle(self)
         self.launched = False
-        self.speed = 1
-        self.crazy_colors = False
+        self.double_speed = False
 
         while self.balls:
             self.clock.wait()
@@ -468,7 +485,7 @@ class BallGame:
                     # center the ball on the paddle
                     ball.x = self.paddle.x
 
-            if self.crazy_colors:
+            if self.double_speed:
                 self.screen.fill((255, 0, 0))
             else:
                 self.screen.fill(0)
